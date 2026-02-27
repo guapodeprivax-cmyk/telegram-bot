@@ -1,0 +1,56 @@
+from telethon import TelegramClient, events
+
+api_id = YOUR_API_ID        # Remplace par ton api_id
+api_hash = "YOUR_API_HASH"  # Remplace par ton api_hash
+
+client = TelegramClient("session", api_id, api_hash)
+VALID_KEYS = {"KEY-123"}  # Remplace par ta clé privée
+sniped = {}
+
+def check_key(key):
+    return key in VALID_KEYS
+
+@client.on(events.NewMessage)
+async def save_messages(event):
+    sniped[event.chat_id] = event.raw_text
+
+@client.on(events.NewMessage(pattern=r"\.clear (\d+) (.+)"))
+async def clear(event):
+    if not check_key(event.pattern_match.group(2)):
+        return
+    n = int(event.pattern_match.group(1))
+    msgs = await client.get_messages(event.chat_id, limit=n+1)
+    await client.delete_messages(event.chat_id, msgs, revoke=True)
+
+@client.on(events.NewMessage(pattern=r"\.snipe (.+)"))
+async def snipe(event):
+    if not check_key(event.pattern_match.group(1)):
+        return
+    msg = sniped.get(event.chat_id)
+    if msg:
+        await event.reply(msg)
+
+@client.on(events.NewMessage(pattern=r"\.pic (.+) (.+)"))
+async def pic(event):
+    if not check_key(event.pattern_match.group(2)):
+        return
+    user = await client.get_entity(event.pattern_match.group(1))
+    photos = await client.get_profile_photos(user)
+    if photos.total:
+        await client.send_file(event.chat_id, photos[0], caption=f"Photo de {user.first_name}")
+
+@client.on(events.NewMessage(pattern=r"\.info (.+) (.+)"))
+async def info(event):
+    if not check_key(event.pattern_match.group(2)):
+        return
+    user = await client.get_entity(event.pattern_match.group(1))
+    text = f"""
+Nom : {user.first_name}
+Username : @{user.username if user.username else 'Aucun'}
+ID : {user.id}
+Bot : {user.bot}
+"""
+    await event.reply(text)
+
+client.start()
+client.run_until_disconnected()
